@@ -8,8 +8,20 @@ plugins {
     alias(libs.plugins.compose.compiler).apply(false)
     alias(libs.plugins.ktlint).apply(false)
     alias(libs.plugins.detekt).apply(false)
-    id("com.google.gms.google-services") version "4.4.2" apply false
-    id("com.google.firebase.crashlytics") version "3.0.2" apply false
+    id("com.google.gms.google-services") version "4.4.4" apply false
+    id("com.google.firebase.crashlytics") version "3.0.6" apply false
+    id("io.github.gradle-nexus.publish-plugin") version "2.0.0"
+}
+
+nexusPublishing {
+    repositories {
+        sonatype {
+            nexusUrl.set(uri("https://ossrh-staging-api.central.sonatype.com/service/local/"))
+            snapshotRepositoryUrl.set(uri("https://central.sonatype.com/repository/maven-snapshots/"))
+            username.set((findProperty("mavenCentralUsername") as String?) ?: System.getenv("MAVEN_CENTRAL_USERNAME"))
+            password.set((findProperty("mavenCentralPassword") as String?) ?: System.getenv("MAVEN_CENTRAL_PASSWORD"))
+        }
+    }
 }
 
 subprojects {
