@@ -1,92 +1,164 @@
 package com.llamatik.app.feature.chatbot
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.koin.koinScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import com.llamatik.app.feature.chatbot.ui.ModelSelectorBottomSheet
+import com.llamatik.app.feature.chatbot.ui.ModelSettingsBottomSheet
 import com.llamatik.app.feature.chatbot.viewmodel.ChatBotSideEffects
+import com.llamatik.app.feature.chatbot.viewmodel.ChatBotState
 import com.llamatik.app.feature.chatbot.viewmodel.ChatBotViewModel
 import com.llamatik.app.feature.chatbot.viewmodel.ChatUiModel
 import com.llamatik.app.localization.Localization
 import com.llamatik.app.localization.getCurrentLocalization
+import com.llamatik.app.resources.Res
+import com.llamatik.app.resources.a_pair_of_llamas_in_a_field_with_clouds_and_mounta
 import com.llamatik.app.ui.components.LlamatikDialog
+import com.llamatik.app.ui.components.NewsCardSmall
 import com.llamatik.app.ui.icon.LlamatikIcons
 import com.llamatik.app.ui.theme.LlamatikTheme
 import com.llamatik.app.ui.theme.Typography
-import com.llamatik.library.platform.LlamaBridge.getModelPath
+import org.jetbrains.compose.resources.painterResource
 import org.koin.core.parameter.ParametersHolder
+
 
 class ChatBotTabScreen : Screen {
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         val localization = getCurrentLocalization()
-        val embedFilePath = getModelPath(modelFileName = "nomic_embed_text_v1_5_Q4_0.gguf")
-        val generatorFilePath = getModelPath(modelFileName = "gemma_3_270m_Q8_0.gguf")
         val isLoading = remember { mutableStateOf(false) }
+        val showSuggestions = remember { mutableStateOf(true) }
+        val showSettingsSheet = remember { mutableStateOf(false) }
+        val showModelSelectorSheet = remember { mutableStateOf(false) }
+
+        val loadingEmbedModelName = remember { mutableStateOf<String?>(null) }
+        val loadingGenerateModelName = remember { mutableStateOf<String?>(null) }
 
         val viewModel = koinScreenModel<ChatBotViewModel>(
             parameters = { ParametersHolder(listOf(navigator).toMutableList(), false) }
         )
 
+        val downloadStates by viewModel.downloadStates.collectAsState()
+        val downloadingMap = downloadStates.mapValues { it.value.inProgress }
+        val progressMap = downloadStates.mapValues { it.value.progress.coerceIn(0, 100) / 100f }
+
         val isDialogOpen = remember { mutableStateOf(false) }
 
-        DisposableEffect(Unit) {
-            viewModel.onStarted(embedFilePath, generatorFilePath)
-            onDispose {
-                viewModel.onDispose()
-            }
+        LaunchedEffect(Unit) {
+            viewModel.onStarted(navigator)
         }
 
         val state by viewModel.state.collectAsState()
         val conversation = viewModel.conversation.collectAsState()
-        SetupSideEffects(viewModel, isLoading)
+        SetupSideEffects(
+            viewModel = viewModel,
+            isLoading = isLoading,
+            showSettingsSheet = showSettingsSheet,
+            showModelSelectorSheet = showModelSelectorSheet,
+            loadingEmbedModelName = loadingEmbedModelName,
+            loadingGenerateModelName = loadingGenerateModelName,
+        )
         LlamatikTheme {
             ChatBotScreenView(
                 viewModel,
                 localization,
-                isDialogOpen,
                 conversation.value,
                 isLoading,
+                state,
+                showSuggestions,
+                showSettingsSheet,
+                showModelSelectorSheet
             )
+            if (showSettingsSheet.value) {
+                ModelSettingsBottomSheet {
+                    showSettingsSheet.value = false
+                }
+            }
+            if (showModelSelectorSheet.value) {
+                ModelSelectorBottomSheet(
+                    downloadingMap = downloadingMap,
+                    progressMap = progressMap,
+                    selectedEmbedModelName = state.selectedEmbedModelName,
+                    selectedGenerateModelName = state.selectedGenerateModelName,
+                    embedModels = state.embedModels,
+                    generateModels = state.generateModels,
+                    loadingEmbedModelName = loadingEmbedModelName.value,          // NEW
+                    loadingGenerateModelName = loadingGenerateModelName.value,
+                    onEmbedModelSelectedClicked = { model ->
+                        loadingEmbedModelName.value = model.name
+                        viewModel.onEmbedModelSelected(model)
+                    },
+                    onGenerateModelSelectedClicked = { model ->
+                        loadingGenerateModelName.value = model.name
+                        viewModel.onGenerateModelSelected(model)
+                    },
+                    onDownloadModelClicked = { model ->
+                        viewModel.onDownloadModel(model)
+                    }
+                ) {
+                    showModelSelectorSheet.value = false
+                }
+            }
             if (isDialogOpen.value) {
                 LlamatikDialog(
                     message = getCurrentLocalization().featureNotAvailableMessage,
@@ -102,7 +174,11 @@ class ChatBotTabScreen : Screen {
     @Composable
     private fun SetupSideEffects(
         viewModel: ChatBotViewModel,
-        isLoading: MutableState<Boolean>
+        isLoading: MutableState<Boolean>,
+        showModelSelectorSheet: MutableState<Boolean>,
+        showSettingsSheet: MutableState<Boolean>,
+        loadingEmbedModelName: MutableState<String?>,
+        loadingGenerateModelName: MutableState<String?>,
     ) {
         val sideEffects = viewModel.sideEffects.collectAsState(ChatBotSideEffects.Initial)
         sideEffects.value.apply {
@@ -120,6 +196,25 @@ class ChatBotTabScreen : Screen {
                     isLoading.value = false
                 }
                 ChatBotSideEffects.ScrollToBottom -> {}
+                ChatBotSideEffects.OnEmbedModelLoaded -> {
+                    loadingEmbedModelName.value = null
+                    showModelSelectorSheet.value = false
+                }
+                ChatBotSideEffects.OnGenerateModelLoaded -> {
+                    loadingGenerateModelName.value = null
+                    showModelSelectorSheet.value = false
+                }
+
+                ChatBotSideEffects.OnSettingsChanged -> {
+                    showSettingsSheet.value = false
+                }
+
+                ChatBotSideEffects.OnEmbedModelLoadError -> {
+                    loadingEmbedModelName.value = null
+                }
+                ChatBotSideEffects.OnGenerateModelLoadError -> {
+                    loadingGenerateModelName.value = null
+                }
             }
         }
     }
@@ -128,9 +223,12 @@ class ChatBotTabScreen : Screen {
     fun ChatBotScreenView(
         viewModel: ChatBotViewModel,
         localization: Localization,
-        isDialogOpen: MutableState<Boolean>,
         conversation: List<ChatUiModel.Message>,
         isLoading: MutableState<Boolean>,
+        state: ChatBotState,
+        showSuggestions: MutableState<Boolean>,
+        showSettingsSheet: MutableState<Boolean>,
+        showModelSelectorSheet: MutableState<Boolean>,
     ) {
         BoxWithConstraints(Modifier.fillMaxSize(), propagateMinConstraints = true) {
 
@@ -138,10 +236,19 @@ class ChatBotTabScreen : Screen {
                 topBar = {
                     TopAppBar(
                         title = {
-                            Text(
-                                text = "Llamatik AI PREVIEW",
-                                style = Typography.get().titleMedium
-                            )
+                            Column(
+                                modifier = Modifier
+                                    .padding(top = 16.dp)
+                            ) {
+                                Text(
+                                    text = state.greeting,
+                                    style = Typography.get().labelSmall
+                                )
+                                Text(
+                                    text = state.header,
+                                    style = Typography.get().bodyLarge
+                                )
+                            }
                         },
                         colors = TopAppBarDefaults.mediumTopAppBarColors(
                             containerColor = MaterialTheme.colorScheme.background
@@ -159,6 +266,7 @@ class ChatBotTabScreen : Screen {
                             }
                             IconButton(
                                 onClick = {
+                                    showSuggestions.value = true
                                     viewModel.onClearConversation()
                                 }
                             ) {
@@ -174,7 +282,7 @@ class ChatBotTabScreen : Screen {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(paddingValues).padding(bottom = 80.dp)
+                        .padding(paddingValues)
                         .background(MaterialTheme.colorScheme.background)
                 ) {
                     Spacer(
@@ -186,9 +294,44 @@ class ChatBotTabScreen : Screen {
                         messages = conversation,
                         addressee = ChatUiModel.Author.bot
                     )
-                    ChatView(localization, viewModel, isDialogOpen, chatUiModel, isLoading)
+                    ChatView(
+                        localization,
+                        viewModel,
+                        chatUiModel,
+                        isLoading,
+                        state,
+                        showSuggestions,
+                        showSettingsSheet,
+                        showModelSelectorSheet
+                    )
                 }
             }
+        }
+    }
+
+    @Composable
+    fun ChatHeader() {
+        var sizeImage by remember { mutableStateOf(IntSize.Zero) }
+        val gradient = Brush.verticalGradient(
+            colors = listOf(
+                Color.Transparent,
+                MaterialTheme.colorScheme.background
+            ),
+            startY = sizeImage.height.toFloat() / 3,
+            endY = sizeImage.height.toFloat()
+        )
+
+        Box {
+            Image(
+                modifier = Modifier.fillMaxWidth().height(140.dp)
+                    .onGloballyPositioned {
+                        sizeImage = it.size
+                    },
+                contentScale = ContentScale.FillWidth,
+                painter = painterResource(Res.drawable.a_pair_of_llamas_in_a_field_with_clouds_and_mounta),
+                contentDescription = null
+            )
+            Box(modifier = Modifier.matchParentSize().background(gradient))
         }
     }
 
@@ -196,13 +339,18 @@ class ChatBotTabScreen : Screen {
     fun ChatView(
         localization: Localization,
         viewModel: ChatBotViewModel,
-        isDialogOpen: MutableState<Boolean>,
         chatUiModel: ChatUiModel,
-        isLoading: MutableState<Boolean>
+        isLoading: MutableState<Boolean>,
+        state: ChatBotState,
+        showSuggestions: MutableState<Boolean>,
+        showSettingsSheet: MutableState<Boolean>,
+        showModelSelectorSheet: MutableState<Boolean>,
     ) {
         val listState = rememberLazyListState()
         LaunchedEffect(chatUiModel.messages.size) {
-            listState.animateScrollToItem(chatUiModel.messages.size)
+            if (chatUiModel.messages.isNotEmpty()) {
+                listState.animateScrollToItem(chatUiModel.messages.size -1)
+            }
         }
 
         Column(
@@ -214,20 +362,8 @@ class ChatBotTabScreen : Screen {
                     verticalArrangement = Arrangement.Top,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text(
-                        modifier = Modifier.padding(16.dp),
-                        text = "\uD83D\uDEEB Ok, let's start! How can I help you?",
-                        style = MaterialTheme.typography.titleLarge,
-                        textAlign = TextAlign.Center,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                    Text(
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                        text = "Here are some hints:\n\n---\n\n",
-                        style = MaterialTheme.typography.bodyMedium,
-                        textAlign = TextAlign.Center,
-                        color = MaterialTheme.colorScheme.outline
-                    )
+                    ChatHeader()
+                    LatestNewsCarousel(viewModel, localization, state)
                 }
             } else {
                 LazyColumn(
@@ -235,22 +371,25 @@ class ChatBotTabScreen : Screen {
                     modifier = Modifier.fillMaxWidth().weight(1f)
                 ) {
                     items(chatUiModel.messages.size) { item ->
-                        ChatItem(chatUiModel.messages[item])
-                        if (isLoading.value && item == chatUiModel.messages.size - 1) {
-                            Spacer(modifier = Modifier.height(16.dp))
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp).align(Alignment.End)
-                            )
-                        }
+                        ChatItem(
+                            message = chatUiModel.messages[item],
+                            showLoading = isLoading.value && item == chatUiModel.messages.size - 1
+                        )
                     }
                 }
             }
-            ChatInputBox(viewModel)
+            ChatInputBox(
+                state = state,
+                viewModel = viewModel,
+                showSuggestions = showSuggestions,
+                onOpenModelSelector = { showModelSelectorSheet.value = true },
+                onOpenSettings = { showSettingsSheet.value = true }
+            )
         }
     }
 
     @Composable
-    fun ChatItem(message: ChatUiModel.Message) {
+    fun ChatItem(message: ChatUiModel.Message, showLoading: Boolean) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -276,69 +415,282 @@ class ChatBotTabScreen : Screen {
                         if (message.isFromMe)
                             MaterialTheme.colorScheme.inversePrimary
                         else
-                            MaterialTheme.colorScheme.surfaceContainer
+                            MaterialTheme.colorScheme.primaryContainer
                     )
                     .padding(16.dp)
             ) {
                 Text(text = message.text)
             }
-            Text(
+            Row(
                 modifier = Modifier.align(if (message.isFromMe) Alignment.End else Alignment.Start),
-                text = if (message.isFromMe) "\uD83D\uDEE9 Me" else "\uD83D\uDC68\uD83C\uDFFB\u200D✈\uFE0F Llamatik AI",
-                style = Typography.get().titleSmall,
-                color = if (message.isFromMe) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
-            )
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    modifier = Modifier.align(Alignment.CenterVertically),
+                    text = if (message.isFromMe) "\uD83D\uDEE9 Me" else "\uD83D\uDC68\uD83C\uDFFB\u200D✈\uFE0F Llamatik AI",
+                    style = Typography.get().titleSmall,
+                    color = if (message.isFromMe) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                )
+                if (showLoading) {
+                    Spacer(modifier = Modifier.size(8.dp))
+                    CircularProgressIndicator(
+                        modifier =
+                            Modifier
+                                .size(10.dp)
+                                .align(Alignment.CenterVertically)
+                    )
+                }
+            }
+        }
+    }
+
+    @Composable
+    fun LatestNewsCarousel(
+        viewModel: ChatBotViewModel,
+        localization: Localization,
+        state: ChatBotState
+    ) {
+        if (state.latestNews.isNotEmpty()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = localization.homeLastestNews,
+                    style = Typography.get().titleMedium,
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp)
+                )
+                Text(
+                    text = "View All",
+                    style = Typography.get().titleMedium,
+                    modifier = Modifier
+                        .padding(start = 16.dp, end = 16.dp, top = 16.dp)
+                        .clickable {
+                            viewModel.onOpenNewsClicked()
+                        }
+                )
+            }
+            LazyRow(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                items(state.latestNews.size) { index ->
+                    val item = state.latestNews[index]
+                    NewsCardSmall(
+                        feedItem = item,
+                        width = 240.dp,
+                        height = 200.dp
+                    ) {
+                        viewModel.onOpenFeedItemDetail(item.link)
+                    }
+                    if (index == state.latestNews.size - 1) {
+                        Spacer(modifier = Modifier.size(16.dp))
+                    }
+                }
+            }
         }
     }
 }
 
 @Composable
 fun ChatInputBox(
-    viewModel: ChatBotViewModel
+    state: ChatBotState,
+    viewModel: ChatBotViewModel,
+    showSuggestions: MutableState<Boolean>,
+    suggestions: List<String> = listOf(
+        "Summarize the latest news",
+        "Create a receipt",
+        "Draft a polite reply"
+    ),
+    onOpenModelSelector: () -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        val input = remember { mutableStateOf(TextFieldValue()) }
+        var input by rememberSaveable(stateSaver = TextFieldValue.Saver) {
+            mutableStateOf(TextFieldValue())
+        }
 
         Column(
-            horizontalAlignment = Alignment.End,
+            horizontalAlignment = Alignment.Start,
         ) {
-            Spacer(
-                modifier = Modifier.fillMaxWidth().height(1.dp)
-                    .background(MaterialTheme.colorScheme.surfaceDim)
-            )
-            TextField(
-                modifier = Modifier.fillMaxWidth(),
-                trailingIcon = {
-                    IconButton(
-                        onClick = {
-                            val message = input.value.text
-                            input.value = TextFieldValue()
-                            viewModel.onMessageSend(message)
-                        },
-                        modifier = Modifier.size(56.dp).padding(8.dp)
-                            .clip(shape = RoundedCornerShape(16.dp))
-                    ) {
-                        Box {
+            if (showSuggestions.value && suggestions.isNotEmpty()) {
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    items(suggestions.size) { index ->
+                        val hint = suggestions[index]
+                        if (index == 0) {
+                            Spacer(modifier = Modifier.size(16.dp))
+                        }
+
+                        Surface(
+                            onClick = {
+                                input = TextFieldValue(hint)
+                                val message = input.text.trim()
+                                if (message.isNotEmpty()) {
+                                    input = TextFieldValue()
+                                    viewModel.onMessageSendDirect(message)
+                                    showSuggestions.value = false
+                                }
+                            },
+                            shape = RoundedCornerShape(9.dp),
+                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            tonalElevation = 1.dp,
+                            modifier = Modifier
+                                .padding(end = 8.dp, bottom = 6.dp)
+                        ) {
+                            Text(
+                                text = hint,
+                                style = Typography.get().labelMedium,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        }
+                        if (index == suggestions.size - 1) {
+                            Spacer(modifier = Modifier.size(16.dp))
+                        }
+                    }
+                }
+            }
+
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                tonalElevation = 1.dp,
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                modifier = Modifier
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
+            ) {
+                val keyboardController = LocalSoftwareKeyboardController.current
+                val canSend = input.text.isNotBlank()
+                TextField(
+                    value = input,
+                    onValueChange = { input = it },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 2.dp),
+                    placeholder = { Text("Ask me something…") },
+                    textStyle = Typography.get().bodyMedium,
+                    singleLine = false,
+                    minLines = 1,
+                    maxLines = 6,
+                    shape = RoundedCornerShape(20.dp),
+                    keyboardOptions = KeyboardOptions(
+                        imeAction = ImeAction.Send,
+                        capitalization = KeyboardCapitalization.Sentences
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onSend = { keyboardController?.hide() },
+                    ),
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        disabledContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent
+                    ),
+                    trailingIcon = {
+                        IconButton(
+                            onClick = {
+                                if (canSend) {
+                                    val message = input.text.trim()
+                                    input = TextFieldValue()
+                                    viewModel.onMessageSendDirect(message)
+                                    showSuggestions.value = false
+                                    keyboardController?.hide()
+                                }
+                            },
+                            enabled = canSend,
+                            modifier = Modifier
+                                .padding(end = 8.dp)
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(
+                                    if (canSend) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.surfaceVariant
+                                )
+                        ) {
                             Icon(
                                 imageVector = LlamatikIcons.Send,
                                 contentDescription = "Send",
+                                tint = if (canSend) MaterialTheme.colorScheme.onPrimary
+                                else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                    }
-                },
-                label = { Text(text = "Ask a question...") },
-                value = input.value,
-                onValueChange = { input.value = it },
-                textStyle = Typography.get().bodyMedium,
-                colors = TextFieldDefaults.colors(
-                    unfocusedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    focusedContainerColor = MaterialTheme.colorScheme.secondaryContainer
+                    },
                 )
+            }
+
+            GenerateModelSelector(
+                selectedModelName = state.selectedGenerateModelName,
+                onOpenModelSelector = onOpenModelSelector,
+                onOpenSettings = onOpenSettings
             )
+        }
+    }
+}
+
+@Composable
+fun GenerateModelSelector(
+    selectedModelName: String?,
+    onOpenModelSelector: () -> Unit,
+    onOpenSettings: () -> Unit,
+) {
+    Box(
+        modifier = Modifier.fillMaxWidth(),
+        contentAlignment = Alignment.Center
+    ) {
+        Box {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Surface(
+                    onClick = onOpenModelSelector,
+                    shape = RoundedCornerShape(999.dp),
+                    tonalElevation = 1.dp,
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    modifier = Modifier.defaultMinSize(minHeight = 32.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Memory,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = selectedModelName ?: "no model selected",
+                            style = Typography.get().labelMedium
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Icon(
+                            imageVector = Icons.Default.ExpandMore,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                }
+/*
+                Spacer(modifier = Modifier.size(8.dp))
+
+                IconButton(
+                    onClick = onOpenSettings,
+                    modifier = Modifier.size(24.dp),
+                    content = {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                )
+ */
+            }
         }
     }
 }

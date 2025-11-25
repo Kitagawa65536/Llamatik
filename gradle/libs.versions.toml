@@ -12,8 +12,8 @@ voyager = "1.1.0-beta03"
 koin = "4.1.1"
 koin-compose = "4.1.1"
 junit = "4.13.2"
-androidGradlePlugin = "8.13.0"
-composeMultiplatform = "1.9.2"
+androidGradlePlugin = "8.13.1"
+composeMultiplatform = "1.9.3"
 exposed = "0.61.0"
 ktlint = "13.1.0"
 detekt = "1.23.8"
@@ -34,6 +34,7 @@ kotlinStdlib = "2.2.21"
 kotlinTest = "2.2.21"
 runner = "1.6.2"
 core = "1.6.1"
+runtime = "1.9.4"
 
 [libraries]
 # Common
@@ -111,7 +112,7 @@ koin-compose = { module = "io.insert-koin:koin-compose", version.ref = "koin-com
 kotlinx-coroutines-swingui = "org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.10.2"
 ktor-client-java = { module = "io.ktor:ktor-client-java", version.ref = "ktor-client" }
 androidx-compose-ui-util = "androidx.compose.ui:ui-util:1.9.4"
-jetbrains-compose-ui-util = "org.jetbrains.compose.ui:ui-util:1.9.1"
+jetbrains-compose-ui-util = "org.jetbrains.compose.ui:ui-util:1.9.2"
 
 # Backend
 ktor-server-core = { module = "io.ktor:ktor-server-core", version.ref = "ktor-server" }
@@ -149,6 +150,7 @@ kotlin-test-junit = { module = "org.jetbrains.kotlin:kotlin-test-junit", version
 #androidx-navigation-common-ktx = { group = "androidx.navigation", name = "navigation-common-ktx", version.ref = "navigationCommonKtx" }
 kotlin-stdlib = { group = "org.jetbrains.kotlin", name = "kotlin-stdlib", version.ref = "kotlinStdlib" }
 kotlin-test = { group = "org.jetbrains.kotlin", name = "kotlin-test", version.ref = "kotlinTest" }
+androidx-compose-runtime = { group = "androidx.compose.runtime", name = "runtime", version.ref = "runtime" }
 #androidx-runner = { group = "androidx.test", name = "runner", version.ref = "runner" }
 #androidx-core = { group = "androidx.test", name = "core", version.ref = "core" }
 

@@ -17,28 +17,10 @@ val versionMinor = properties["llamatik.version.minor"].toString().toInt()
 val versionPatch = properties["llamatik.version.patch"].toString().toInt()
 
 fun versionCode(): Int {
-    versionNum?.let {
-        return (versionMajor * 1000000) + (versionMinor * 1000) + it.toInt()
-    } ?: return versionMinor + 1
+    return versionMajor * 10000 + versionMinor * 100 + versionPatch
 }
 
 kotlin {
-    /*@OptIn(ExperimentalWasmDsl::class)
-    wasmJs {
-        moduleName = "composeApp"
-        browser {
-            commonWebpackConfig {
-                outputFileName = "composeApp.js"
-                devServer = (devServer ?: KotlinWebpackConfig.DevServer()).apply {
-                    static = (static ?: mutableListOf()).apply {
-                        // Serve sources to debug inside browser
-                        add(project.projectDir.path)
-                    }
-                }
-            }
-        }
-        binaries.executable()
-    }*/
     androidTarget {
         @OptIn(ExperimentalKotlinGradlePluginApi::class)
         compilerOptions {
@@ -49,7 +31,7 @@ kotlin {
     listOf(
         iosX64(),
         iosArm64(),
-        iosSimulatorArm64()
+        iosSimulatorArm64(),
     ).forEach { iosTarget ->
         iosTarget.binaries.framework {
             baseName = "ComposeApp"
@@ -126,7 +108,10 @@ kotlin {
 
 android {
     namespace = "com.llamatik.app.android"
-    compileSdk = libs.versions.android.compileSdk.get().toInt()
+    compileSdk =
+        libs.versions.android.compileSdk
+            .get()
+            .toInt()
 
     sourceSets["main"].manifest.srcFile("src/androidMain/AndroidManifest.xml")
     sourceSets["main"].res.srcDirs("src/androidMain/res")
@@ -134,8 +119,14 @@ android {
 
     defaultConfig {
         applicationId = "com.llamatik.app.android"
-        minSdk = libs.versions.android.minSdk.get().toInt()
-        targetSdk = libs.versions.android.targetSdk.get().toInt()
+        minSdk =
+            libs.versions.android.minSdk
+                .get()
+                .toInt()
+        targetSdk =
+            libs.versions.android.targetSdk
+                .get()
+                .toInt()
         versionCode = versionCode()
         versionName = "$versionMajor.$versionMinor.$versionPatch"
     }
@@ -148,7 +139,7 @@ android {
         getByName("release") {
             isMinifyEnabled = true
             isShrinkResources = true
-            proguardFiles(getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro")
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.getByName("debug")
         }
     }
@@ -202,10 +193,14 @@ android {
 compose.desktop {
     application {
         mainClass = "MainKt"
+        jvmArgs += listOf("-Dapple.awt.application.name=Llamatik")
 
         nativeDistributions {
+            macOS {
+                bundleID = "com.llamatik.app"
+            }
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
-            packageName = "com.llamatik.app"
+            packageName = "Llamatik"
             packageVersion = "$versionMajor.$versionMinor.$versionPatch"
         }
     }
