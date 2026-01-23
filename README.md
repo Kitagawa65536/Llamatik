@@ -109,9 +109,9 @@ only configuration.
 - iOS Deployment Target: **16.6+**
 - Android MinSDK API: **26**
 
-### LLAMA.CPP
+## 📦 Current Versions
 
-- Current llama.cpp version: [b7815](https://github.com/ggml-org/llama.cpp/releases/tag/b7815)
+- llama.cpp version: [b7815](https://github.com/ggml-org/llama.cpp/releases/tag/b7815)
 
 ---
 
@@ -134,7 +134,7 @@ dependencyResolutionManagement {
 }
 
 commonMain.dependencies {
-    implementation("com.llamatik:library:0.12.0")
+    implementation("com.llamatik:library:0.13.0")
 }
 ```
 
