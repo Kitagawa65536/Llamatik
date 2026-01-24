@@ -1,6 +1,6 @@
 ---
 title: "Download"
-description: "Get the Llamatik app for Android and iOS."
+description: "All versions run fully on-device. No accounts. No cloud."
 ---
 
 ## Llamatik App
