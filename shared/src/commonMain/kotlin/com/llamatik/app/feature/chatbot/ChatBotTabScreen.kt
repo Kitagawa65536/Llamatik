@@ -23,6 +23,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -33,6 +34,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,6 +47,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.screen.Screen
@@ -60,7 +64,10 @@ import com.llamatik.app.feature.chatbot.viewmodel.ChatBotViewModel
 import com.llamatik.app.feature.chatbot.viewmodel.ChatUiModel
 import com.llamatik.app.localization.Localization
 import com.llamatik.app.localization.getCurrentLocalization
+import com.llamatik.app.permissions.rememberAudioPermissionRequester
 import com.llamatik.app.permissions.rememberNotificationPermissionRequester
+import com.llamatik.app.platform.AudioPaths
+import com.llamatik.app.platform.AudioRecorder
 import com.llamatik.app.resources.Res
 import com.llamatik.app.resources.a_pair_of_llamas_in_a_field_with_clouds_and_mounta
 import com.llamatik.app.ui.components.LlamatikDialog
@@ -68,6 +75,10 @@ import com.llamatik.app.ui.components.NewsCardSmall
 import com.llamatik.app.ui.icon.LlamatikIcons
 import com.llamatik.app.ui.theme.LlamatikTheme
 import com.llamatik.app.ui.theme.Typography
+import com.llamatik.library.platform.WhisperBridge
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.painterResource
 import org.koin.core.parameter.ParametersHolder
 
@@ -85,6 +96,7 @@ class ChatBotTabScreen : Screen {
 
         val loadingEmbedModelName = remember { mutableStateOf<String?>(null) }
         val loadingGenerateModelName = remember { mutableStateOf<String?>(null) }
+        val loadingSttModelName = remember { mutableStateOf<String?>(null) }
 
         val viewModel = koinScreenModel<ChatBotViewModel>(
             parameters = { ParametersHolder(listOf(navigator).toMutableList(), false) }
@@ -110,6 +122,7 @@ class ChatBotTabScreen : Screen {
             showModelSelectorSheet = showModelSelectorSheet,
             loadingEmbedModelName = loadingEmbedModelName,
             loadingGenerateModelName = loadingGenerateModelName,
+            loadingSttModelName = loadingSttModelName,
         )
 
         LlamatikTheme {
@@ -150,15 +163,13 @@ class ChatBotTabScreen : Screen {
                             )
                             Text(
                                 text = localization.downloadingMainModels,
-                                style = Typography.get().bodyMedium
+                                style = Typography.get().bodyMedium,
+                                textAlign = TextAlign.Center
                             )
                             if (state.initialSetupProgress > 0) {
                                 Text(
                                     text = "${localization.progress}: ${
-                                        state.initialSetupProgress.coerceIn(
-                                            0,
-                                            100
-                                        )
+                                        state.initialSetupProgress.coerceIn(0, 100)
                                     }%",
                                     style = Typography.get().labelMedium,
                                     color = MaterialTheme.colorScheme.primary
@@ -180,12 +191,19 @@ class ChatBotTabScreen : Screen {
                 ModelSelectorBottomSheet(
                     downloadingMap = downloadingMap,
                     progressMap = progressMap,
+
                     selectedEmbedModelName = state.selectedEmbedModelName,
                     selectedGenerateModelName = state.selectedGenerateModelName,
+                    selectedSttModelName = state.selectedSttModelName,
+
                     embedModels = state.embedModels,
                     generateModels = state.generateModels,
+                    sttModels = state.sttModels,
+
                     loadingEmbedModelName = loadingEmbedModelName.value,
                     loadingGenerateModelName = loadingGenerateModelName.value,
+                    loadingSttModelName = loadingSttModelName.value,
+
                     onEmbedModelSelectedClicked = { model ->
                         loadingEmbedModelName.value = model.name
                         viewModel.onEmbedModelSelected(model)
@@ -194,6 +212,11 @@ class ChatBotTabScreen : Screen {
                         loadingGenerateModelName.value = model.name
                         viewModel.onGenerateModelSelected(model)
                     },
+                    onSttModelSelectedClicked = { model ->
+                        loadingSttModelName.value = model.name
+                        viewModel.onSttModelSelected(model)
+                    },
+
                     onDownloadModelClicked = { model ->
                         notificationPermissionRequester.requestAndRun(
                             onGranted = { viewModel.onDownloadModel(model) },
@@ -229,6 +252,7 @@ class ChatBotTabScreen : Screen {
         showSettingsSheet: MutableState<Boolean>,
         loadingEmbedModelName: MutableState<String?>,
         loadingGenerateModelName: MutableState<String?>,
+        loadingSttModelName: MutableState<String?>,
     ) {
         val sideEffects = viewModel.sideEffects.collectAsState(ChatBotSideEffects.Initial)
         sideEffects.value.apply {
@@ -249,6 +273,7 @@ class ChatBotTabScreen : Screen {
                 }
 
                 ChatBotSideEffects.ScrollToBottom -> {}
+
                 ChatBotSideEffects.OnEmbedModelLoaded -> {
                     loadingEmbedModelName.value = null
                     showModelSelectorSheet.value = false
@@ -256,6 +281,11 @@ class ChatBotTabScreen : Screen {
 
                 ChatBotSideEffects.OnGenerateModelLoaded -> {
                     loadingGenerateModelName.value = null
+                    showModelSelectorSheet.value = false
+                }
+
+                ChatBotSideEffects.OnSttModelLoaded -> {
+                    loadingSttModelName.value = null
                     showModelSelectorSheet.value = false
                 }
 
@@ -269,6 +299,10 @@ class ChatBotTabScreen : Screen {
 
                 ChatBotSideEffects.OnGenerateModelLoadError -> {
                     loadingGenerateModelName.value = null
+                }
+
+                ChatBotSideEffects.OnSttModelLoadError -> {
+                    loadingSttModelName.value = null
                 }
             }
         }
@@ -420,7 +454,8 @@ class ChatBotTabScreen : Screen {
         showModelSelectorSheet: MutableState<Boolean>,
     ) {
         val showChatHistorySheet = remember { mutableStateOf(false) }
-        var input by androidx.compose.runtime.saveable.rememberSaveable(stateSaver = TextFieldValue.Saver) {
+        val audioPermissionRequester = rememberAudioPermissionRequester()
+        var input by rememberSaveable(stateSaver = TextFieldValue.Saver) {
             mutableStateOf(TextFieldValue())
         }
 
@@ -467,6 +502,15 @@ class ChatBotTabScreen : Screen {
                     }
                 }
             }
+
+            val scope = rememberCoroutineScope()
+            val recorder = remember { AudioRecorder() }
+            var isListening by remember { mutableStateOf(false) }
+            var isTranscribing by remember { mutableStateOf(false) }
+
+            val whisperReady = state.isSttModelLoaded
+            val tempWavPath = AudioPaths.tempWavPath()
+
             ChatInputBox(
                 localization = localization,
                 state = state,
@@ -476,7 +520,52 @@ class ChatBotTabScreen : Screen {
                 onInputChange = { input = it },
                 onOpenChatHistory = { showChatHistorySheet.value = true },
                 onOpenModelSelector = { showModelSelectorSheet.value = true },
-                onOpenSettings = { showSettingsSheet.value = true }
+                onOpenSettings = { showSettingsSheet.value = true },
+                isListening = isListening,
+                isTranscribing = isTranscribing,
+                onMicClick = {
+                    audioPermissionRequester.requestAndRun(
+                        onGranted = {
+                            if (!whisperReady || isTranscribing) return@requestAndRun
+
+                            scope.launch {
+                                try {
+                                    if (!recorder.isRecording) {
+                                        // Start recording
+                                        showSuggestions.value = false
+                                        recorder.start(tempWavPath)
+                                        isListening = true
+                                    } else {
+                                        // Stop recording and transcribe
+                                        isListening = false
+                                        isTranscribing = true
+
+                                        val wavPath = recorder.stop()
+
+                                        val text = withContext(Dispatchers.Default) {
+                                            // Model already selected + loaded by the VM
+                                            WhisperBridge.transcribeWav(wavPath, language = null).trim()
+                                        }
+
+                                        if (text.isNotBlank()) {
+                                            val newText =
+                                                if (input.text.isBlank()) text
+                                                else "${input.text.trimEnd()} $text"
+                                            input = input.copy(text = newText)
+                                        }
+                                    }
+                                } catch (t: Throwable) {
+                                    isListening = false
+                                    isTranscribing = false
+                                    runCatching { if (recorder.isRecording) recorder.stop() }
+                                    println("[VoiceInput] Error: ${t.message}\n${t.stackTraceToString()}")
+                                } finally {
+                                    isTranscribing = false
+                                }
+                            }
+                        }
+                    )
+                }
             )
 
             if (showChatHistorySheet.value) {
@@ -623,11 +712,11 @@ class ChatBotTabScreen : Screen {
     private fun TemporaryChatIndicator(
         localization: Localization,
     ) {
-        androidx.compose.material3.Surface(
+        Surface(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 8.dp),
-            shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(16.dp),
             color = MaterialTheme.colorScheme.surfaceVariant,
             tonalElevation = 1.dp
         ) {

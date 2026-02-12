@@ -63,11 +63,11 @@ class ModelsRepository(private val service: ServiceClient) {
             return file
         } catch (e: CancellationException) {
             Logger.d(e) { "Download cancelled for $url" }
-            runCatching { LlamatikTempFile(fileName).delete(file.absolutePath()) }
+            runCatching { file.delete(file.absolutePath()) }
             throw e
         } catch (t: Throwable) {
             Logger.e(t) { "Download failed for $url" }
-            runCatching { LlamatikTempFile(fileName).delete(file.absolutePath()) }
+            runCatching { file.delete(file.absolutePath()) }
             throw t
         }
     }
@@ -125,6 +125,39 @@ class ModelsRepository(private val service: ServiceClient) {
                 name = "Nomic Embed Text v1.5 Q4",
                 sizeMb = 77,
                 url = "https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF/resolve/main/nomic-embed-text-v1.5.Q4_0.gguf?download=true",
+                template = Plain,
+                systemPrompt = localization.defaultSystemPrompt.trimIndent()
+            ),
+        )
+    }
+
+    fun getDefaultSTTModel(): List<LlamaModel> {
+        return listOf(
+            LlamaModel(
+                name = "Whisper Tiny q8_0",
+                sizeMb = 44,
+                url = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny-q8_0.bin?download=true",
+                template = Plain,
+                systemPrompt = localization.defaultSystemPrompt.trimIndent()
+            ),
+            LlamaModel(
+                name = "Whisper Tiny q5_1",
+                sizeMb = 32,
+                url = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny-q5_1.bin?download=true",
+                template = Plain,
+                systemPrompt = localization.defaultSystemPrompt.trimIndent()
+            ),
+            LlamaModel(
+                name = "Whisper Small q8_0",
+                sizeMb = 264,
+                url = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small-q8_0.bin?download=true",
+                template = Plain,
+                systemPrompt = localization.defaultSystemPrompt.trimIndent()
+            ),
+            LlamaModel(
+                name = "Whisper Medium q8_0",
+                sizeMb = 823,
+                url = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium-q8_0.bin?download=true",
                 template = Plain,
                 systemPrompt = localization.defaultSystemPrompt.trimIndent()
             ),

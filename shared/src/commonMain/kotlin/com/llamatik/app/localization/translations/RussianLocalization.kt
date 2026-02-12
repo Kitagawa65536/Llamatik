@@ -178,4 +178,9 @@ internal object RussianLocalization : Localization {
     override val temporaryChat = "Временный чат"
     override val messages = "сообщений"
     override val temporaryChatExplanation = "Включён временный чат — этот диалог не будет сохранён на устройстве."
+    override val voiceInput = "Голосовой ввод"
+    override val listening = "Идёт запись…"
+    override val transcribing = "Выполняется расшифровка…"
+    override val embedModels = "Модели эмбеддингов"
+    override val sttModels = "Модели распознавания речи"
 }

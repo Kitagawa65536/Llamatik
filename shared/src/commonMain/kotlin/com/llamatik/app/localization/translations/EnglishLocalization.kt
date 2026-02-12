@@ -179,4 +179,9 @@ internal object EnglishLocalization : Localization {
     override val temporaryChat = "Temporary chat"
     override val messages = "messages"
     override val temporaryChatExplanation = "Temporary chat is enabled – this conversation won’t be saved on your device."
+    override val voiceInput = "Voice input"
+    override val listening = "Listening…"
+    override val transcribing = "Transcribing…"
+    override val embedModels = "Embed Models"
+    override val sttModels = "Speech to Text Models"
 }
