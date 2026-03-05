@@ -44,35 +44,44 @@ jobs:
           path: |
             ~/emsdk
             ~/.emscripten_cache
-          key: emsdk-${{ runner.os }}-3.1.68
+          key: emsdk-${{ runner.os }}-3.1.68-v1
 
-      - name: Install emsdk (Emscripten)
-        if: steps.cache-emsdk.outputs.cache-hit != 'true'
+      - name: Install emsdk (if missing)
+        shell: bash
         run: |
           set -euxo pipefail
-          git clone https://github.com/emscripten-core/emsdk.git ~/emsdk
-          cd ~/emsdk
+          if [ ! -d "$HOME/emsdk" ]; then
+            git clone https://github.com/emscripten-core/emsdk.git "$HOME/emsdk"
+          fi
+
+      - name: Activate emsdk + export env for later steps
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          cd "$HOME/emsdk"
+          git fetch --tags --force || true
+
+          # Install is idempotent (fast if already installed / cached)
           ./emsdk install 3.1.68
           ./emsdk activate 3.1.68
 
-      - name: Configure emsdk env (PATH + EMSDK)
-        run: |
-          set -euxo pipefail
-          echo "EMSDK=$HOME/emsdk" >> $GITHUB_ENV
-          echo "EM_CACHE=$HOME/.emscripten_cache" >> $GITHUB_ENV
+          # Source official env script (sets PATH + EM_CONFIG + NODE, etc.)
+          source "$HOME/emsdk/emsdk_env.sh"
+
+          # Persist key env vars for subsequent steps
+          echo "EMSDK=$HOME/emsdk" >> "$GITHUB_ENV"
+          echo "EM_CACHE=$HOME/.emscripten_cache" >> "$GITHUB_ENV"
           mkdir -p "$HOME/.emscripten_cache"
 
-          # Make emcmake/emmake visible to Gradle (and node/python toolchain used by emcc)
-          echo "$HOME/emsdk/upstream/emscripten" >> $GITHUB_PATH
-          echo "$HOME/emsdk/upstream/bin" >> $GITHUB_PATH
+          # Persist PATH entries for subsequent steps
+          echo "$HOME/emsdk/upstream/emscripten" >> "$GITHUB_PATH"
+          echo "$HOME/emsdk/upstream/bin" >> "$GITHUB_PATH"
 
-          # emsdk ships its own node; add it too (dir name contains version)
-          NODE_BIN="$(ls -d $HOME/emsdk/node/*/bin | head -n1)"
-          echo "$NODE_BIN" >> $GITHUB_PATH
-
-          # quick sanity check
+          # Sanity checks (must succeed)
           which emcmake
           which emmake
+          which emcc
           emcc -v
 
       - name: Set up JDK
@@ -139,6 +148,8 @@ jobs:
           SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
           SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
           RELEASE_VERSION: ${{ steps.v.outputs.version }}
+          EMSDK: ${{ env.EMSDK }}
+          EM_CACHE: ${{ env.EM_CACHE }}
         run: |
           ./gradlew \
             -Pversion=${RELEASE_VERSION} \
