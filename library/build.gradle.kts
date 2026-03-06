@@ -459,6 +459,11 @@ kotlin {
         val jvmMain by getting {
             resources.srcDir(generatedNativeResourcesDir)
         }
+        val wasmJsMain by getting {
+            dependencies {
+                implementation(libs.kotlinx.coroutines.core)
+            }
+        }
     }
 
     // ---------- Web (WASM) native build ----------
