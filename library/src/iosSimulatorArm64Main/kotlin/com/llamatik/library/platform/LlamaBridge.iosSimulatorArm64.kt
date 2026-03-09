@@ -29,7 +29,6 @@ import kotlinx.cinterop.get
 import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.staticCFunction
 import kotlinx.cinterop.toKString
-import org.jetbrains.compose.resources.ExperimentalResourceApi
 import platform.Foundation.NSBundle
 import platform.Foundation.NSCachesDirectory
 import platform.Foundation.NSData
@@ -42,7 +41,7 @@ import platform.Foundation.writeToURL
 @Suppress(names = ["EXPECT_ACTUAL_CLASSIFIERS_ARE_IN_BETA_WARNING"])
 actual object LlamaBridge {
 
-    @OptIn(ExperimentalResourceApi::class, BetaInteropApi::class)
+    @OptIn(BetaInteropApi::class)
     actual fun getModelPath(modelFileName: String): String {
         val fm = NSFileManager.defaultManager
         val cachesDir = fm.URLsForDirectory(NSCachesDirectory, NSUserDomainMask).first() as NSURL

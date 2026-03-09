@@ -2,7 +2,6 @@
 
 package com.llamatik.library.platform
 
-import androidx.compose.runtime.remember
 import com.llamatik.library.platform.sd.sd_free_bytes
 import com.llamatik.library.platform.sd.sd_init
 import com.llamatik.library.platform.sd.sd_release
@@ -22,7 +21,7 @@ actual object StableDiffusionBridge {
 
     actual fun getModelPath(modelFileName: String): String {
         // iOS app manages download/path. Keep consistent with your other bridges.
-        return remember(modelFileName) { modelFileName }
+        return modelFileName
     }
 
     actual fun initModel(modelPath: String, threads: Int): Boolean {
