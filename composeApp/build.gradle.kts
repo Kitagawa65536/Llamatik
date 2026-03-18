@@ -55,6 +55,7 @@ kotlin {
             isStatic = true
         }
     }
+
     sourceSets {
         val desktopMain by getting
         desktopMain.resources.srcDir(generatedNativeResources)
@@ -64,6 +65,7 @@ kotlin {
             implementation(libs.androidx.activity.compose)
             implementation(libs.ktor.client.android)
         }
+
         commonMain.dependencies {
             implementation(compose.runtime)
             implementation(compose.foundation)
@@ -166,11 +168,13 @@ android {
         versionCode = versionCode()
         versionName = "$versionMajor.$versionMinor.$versionPatch"
     }
+
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+
     buildTypes {
         getByName("release") {
             isMinifyEnabled = true
@@ -179,13 +183,16 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
     }
+
     buildFeatures {
         compose = true
     }
+
     dependencies {
         implementation(project(":shared"))
 
@@ -255,7 +262,7 @@ compose.desktop {
         }
 
         buildTypes.release.proguard {
-            configurationFiles.from(file("proguard-rules.pro"))
+            isEnabled.set(false)
         }
     }
 
@@ -329,7 +336,7 @@ tasks.withType(org.gradle.api.tasks.JavaExec::class.java).configureEach {
 
 // Copy dylib into build/generated/nativeResources/native/macos/...
 val copyMacNativeLib by tasks.registering(Copy::class) {
-    dependsOn(":library:compileLlamaJniDesktop") // safest: matches your run dependency
+    dependsOn(":library:compileLlamaJniDesktop")
     from(macNativeDir)
     include("libllama_jni.dylib")
     into(generatedNativeResources.map { it.dir("native/macos") })
