@@ -7,44 +7,34 @@
         {{ end }}
     </div>
 
-    {{ with .Params.primary_platforms }}
-    <div class="download-grid">
-        {{ range . }}
-        <div class="download-card">
-            <h2>{{ .title }}</h2>
-            <p>{{ .description }}</p>
+    <!-- MOBILE SECTION -->
+    {{ with .Params.mobile_section }}
+    <div class="download-section">
+        <h2>{{ .title }}</h2>
 
-            <a
-                    class="download-button {{ .button_style | default "primary" }}"
-            href="{{ .button_url }}"
-            {{ if .external }}target="_blank" rel="noopener"{{ end }}
-            >
-            {{ .button_text }}
-            </a>
+        <div class="download-grid">
+            {{ range .platforms }}
+            <div class="download-card">
+                <h3>{{ .title }}</h3>
+                <p>{{ .description }}</p>
 
-            {{ with .secondary_link }}
-            <br>
-            <a
-                    class="download-checksum"
-                    href="{{ .url }}"
-                    {{ if .external }}target="_blank" rel="noopener"{{ end }}
-            >
-                {{ .text }}
-            </a>
-            {{ end }}
-
-            {{ with .note }}
-            <br><br>
-            <p class="download-note">{{ . | markdownify }}</p>
+                <a
+                        class="download-button {{ .button_style | default "primary" }}"
+                href="{{ .button_url }}"
+                {{ if .external }}target="_blank" rel="noopener"{{ end }}
+                >
+                {{ .button_text }}
+                </a>
+            </div>
             {{ end }}
         </div>
-        {{ end }}
     </div>
     {{ end }}
 
-    {{ with .Params.desktop_section }}
-    <hr class="download-divider" />
+    <br><br><br>
 
+    <!-- DESKTOP SECTION -->
+    {{ with .Params.desktop_section }}
     <div class="download-section">
         <h2>{{ .title }}</h2>
         {{ with .subtitle }}
@@ -84,6 +74,32 @@
                 {{ end }}
             </div>
             {{ end }}
+        </div>
+    </div>
+    {{ end }}
+
+    <br><br><br>
+
+    <!-- WEB SECTION -->
+    {{ with .Params.web_section }}
+    <div class="download-section">
+        <h2>{{ .title }}</h2>
+        {{ with .subtitle }}
+        <p class="download-section-subtitle">{{ . }}</p>
+        {{ end }}
+
+        <div class="download-grid">
+            <div class="download-card">
+                <h3>{{ .card_title }}</h3>
+                <p>{{ .description }}</p>
+
+                <a
+                        class="download-button {{ .button_style | default "primary" }}"
+                href="{{ .button_url }}"
+                >
+                {{ .button_text }}
+                </a>
+            </div>
         </div>
     </div>
     {{ end }}
