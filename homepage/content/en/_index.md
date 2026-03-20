@@ -1,17 +1,15 @@
 ---
 title: 'Homepage'
-meta_title: 'Llamatik - Private AI Tools and Local-First AI Platform'
-description: "Private AI tools designed for privacy, control, and local-first use."
+meta_title: 'Llamatik - Private AI That Runs on Your Device'
+description: "Private AI that runs on your device. Use Llamatik as a local AI app today or build your own AI tools with the platform behind it."
 intro_image: "images/llamatik-lead-image.png"
 intro_image_absolute: false
 intro_image_hide_on_mobile: true
 is_pricing: false
 ---
 
-# Private AI tools that run closer to you.
+# Private AI that runs on your device.
 
-Llamatik is a growing collection of local-first AI products designed for privacy, control, and real-world usefulness.
+Use Llamatik as a local AI app today — or build your own AI tools with the platform behind it.
 
-Chat with AI, generate content, and run models locally — all on your device.
-
-*Use the Llamatik App for private, on-device AI, or explore the platform behind it with the Llamatik Library.*
+No accounts. No tracking. No unnecessary cloud dependency.

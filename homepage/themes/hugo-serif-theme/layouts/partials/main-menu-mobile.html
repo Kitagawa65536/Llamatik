@@ -4,12 +4,14 @@
     {{ range .Site.Menus.main }}
     {{ $active := or ($currentPage.IsMenuCurrent "main" .) ($currentPage.HasMenuCurrent "main" .) }}
     {{ $active = or $active (eq (.URL | relLangURL) ($currentPage.RelPermalink | relLangURL)) }}
-    <li class="menu-item-{{ .Name | lower }} {{ if $active }}active{{ end }}">
-      <a href="{{ .URL }}">
+    <li class="menu-item-{{ .Name | lower | urlize }} {{ if $active }}active{{ end }}">
+      <a href="{{ .URL | absLangURL }}">
         <span>{{ .Name }}</span>
       </a>
     </li>
-    {{end}}
-    {{ partial "lang-switcher.html" . }}
+    {{ end }}
+    <li class="menu-item-language">
+      {{ partial "language-selector.html" . }}
+    </li>
   </ul>
 </div>

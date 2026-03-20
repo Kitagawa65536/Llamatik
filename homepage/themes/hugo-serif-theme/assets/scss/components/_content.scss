@@ -105,6 +105,17 @@
   display: block;
 }
 
+.products-button-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.feature {
+  margin: 0 auto;
+}
+
 .localfirst-content {
   text-align: left;
 }

@@ -6,4 +6,4 @@ secondary_button_text: "Try in Browser"
 secondary_button_url: "/prompt/"
 ---
 
-Download the app or try Llamatik directly in your browser.
+Download the app or try Llamatik instantly in your browser.

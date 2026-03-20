@@ -1,7 +1,7 @@
 ---
-title: "For builders, the platform behind the app"
+title: "For developers, the platform behind the app"
 ---
 
-Llamatik Library focuses on the hard parts of integrating AI — so you can focus on building great products.
+Llamatik removes the complexity of integrating AI across platforms.
 
-Instead of stitching together native code, bindings, and platform-specific logic, Llamatik provides a unified Kotlin-first abstraction that works across platforms and environments.
+Instead of stitching together native bindings and platform-specific logic, you get a unified Kotlin-first abstraction that works across mobile, desktop, and backend environments.

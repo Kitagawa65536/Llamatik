@@ -6,4 +6,4 @@ Most AI today depends entirely on remote servers. That means your data leaves yo
 
 Llamatik takes a different approach.
 
-By running AI locally when possible, Llamatik gives you more control over your data, faster interactions, and a more sustainable way to use AI — without constant reliance on the cloud.
+By running AI locally, Llamatik gives you more control over your data, faster interactions, and a more sustainable way to use AI — without constant reliance on the cloud.
