@@ -1,8 +1,8 @@
 package com.llamatik.app.android.core.di
 
+import android.content.pm.ApplicationInfo
 import android.content.Context
 import androidx.annotation.VisibleForTesting
-import com.google.firebase.BuildConfig
 import com.llamatik.app.di.appModule
 import org.koin.android.ext.koin.androidContext
 import org.koin.android.ext.koin.androidLogger
@@ -22,8 +22,10 @@ object DependencyContainer {
 
     @JvmStatic
     fun initialize(context: Context) {
+        val isDebuggable = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+
         startKoin {
-            if (BuildConfig.DEBUG) {
+            if (isDebuggable) {
                 androidLogger(Level.ERROR)
             }
             androidContext(context)

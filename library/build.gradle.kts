@@ -18,10 +18,23 @@ val minIos = "16.6"
 fun Project.propString(name: String): String? =
     findProperty(name)?.toString()?.takeIf { it.isNotBlank() }
 
-fun canExec(path: String?): Boolean {
-    if (path.isNullOrBlank()) return false
+fun isWindowsHost(): Boolean =
+    System.getProperty("os.name").lowercase().contains("win")
+
+fun existingFile(path: String?): String? {
+    if (path.isNullOrBlank()) return null
     val f = File(path)
-    return f.exists() && f.canExecute()
+    return if (f.exists() && f.isFile) f.absolutePath else null
+}
+
+fun existingExecutable(path: String?): String? {
+    val existing = existingFile(path) ?: return null
+    val f = File(existing)
+    return if (isWindowsHost() || f.canExecute()) f.absolutePath else null
+}
+
+fun canExec(path: String?): Boolean {
+    return existingExecutable(path) != null
 }
 
 fun existingDir(path: String?): String? {
@@ -29,6 +42,19 @@ fun existingDir(path: String?): String? {
     val f = File(path)
     return if (f.exists() && f.isDirectory) f.absolutePath else null
 }
+
+fun executableNamesForHost(name: String): List<String> =
+    if (isWindowsHost()) {
+        listOf(name, "$name.exe", "$name.bat", "$name.cmd")
+    } else {
+        listOf(name)
+    }
+
+fun pathWithPrependedEntries(vararg entries: String?): String =
+    entries
+        .filterNotNull()
+        .filter { it.isNotBlank() }
+        .joinToString(File.pathSeparator)
 
 // Resolve EMSDK root in a way that works in Android Studio (no shell env needed).
 fun Project.resolveEmsdkRoot(): String? {
@@ -54,41 +80,89 @@ fun Project.resolveEmsdkToolOrNull(name: String, emsdkRoot: String?): String? {
     // EMCMAKE_PATH=/full/path/to/emcmake
     // EMMAKE_PATH=/full/path/to/emmake
     val key = "${name.uppercase()}_PATH"
-    propString(key)?.let { if (canExec(it)) return it }
-    System.getenv(key)?.let { if (canExec(it)) return it }
+    propString(key)?.let { existingFile(it)?.let { p -> return p } }
+    System.getenv(key)?.let { existingFile(it)?.let { p -> return p } }
 
     if (!emsdkRoot.isNullOrBlank()) {
         // If EMSDK root known, tools live here:
         // $EMSDK/upstream/emscripten/<tool>
-        val p = File(emsdkRoot, "upstream/emscripten/$name").absolutePath
+        val candidates = executableNamesForHost(name)
+            .map { candidate -> File(emsdkRoot, "upstream/emscripten/$candidate") }
 
-        // ✅ Robustness: even if cache restores without +x, return absolute path for clearer failure
-        val f = File(p)
-        if (f.exists()) {
-            if (!f.canExecute()) {
-                logger.warn("Found $name at $p but it's not executable. CI cache can strip +x. " +
-                        "Fix by chmod +x in workflow, or set ${key} to a valid executable.")
-            } else {
-                return p
+        for (f in candidates) {
+            if (f.exists() && f.isFile) {
+                if (!isWindowsHost() && !f.canExecute()) {
+                    logger.warn("Found $name at ${f.absolutePath} but it's not executable. CI cache can strip +x. " +
+                            "Fix by chmod +x in workflow, or set ${key} to a valid executable.")
+                } else {
+                    return f.absolutePath
+                }
+                // return it anyway; ensureToolAtExecutionTime will fail with a good message if needed
+                return f.absolutePath
             }
-            // return it anyway; ensureToolAtExecutionTime will fail with a good message if needed
-            return p
         }
     }
+
+    findToolOnPathOrNull(name)?.let { return it }
 
     // As a last resort, let it be resolved from PATH at execution time.
     // (We DO NOT throw here, otherwise Android Studio sync fails.)
     return null
 }
 
+fun Project.findToolOnPathOrNull(name: String): String? {
+    val pathEntries = (System.getenv("PATH") ?: "")
+        .split(File.pathSeparator)
+        .filter { it.isNotBlank() }
+
+    for (dir in pathEntries) {
+        for (candidate in executableNamesForHost(name)) {
+            existingExecutable(File(dir, candidate).absolutePath)?.let { return it }
+        }
+    }
+
+    return null
+}
+
+fun Project.findToolOrNull(name: String, extraCandidates: List<String> = emptyList()): String? {
+    val key = "${name.uppercase()}_PATH"
+
+    propString(key)?.let { existingFile(it)?.let { p -> return p } }
+    System.getenv(key)?.let { existingFile(it)?.let { p -> return p } }
+
+    val candidates = mutableListOf<String>()
+    candidates.addAll(extraCandidates)
+    candidates += listOf(
+        "/opt/homebrew/bin/$name",
+        "/usr/local/bin/$name",
+        "/usr/bin/$name"
+    )
+
+    for (p in candidates) {
+        existingExecutable(p)?.let { return it }
+    }
+
+    return findToolOnPathOrNull(name)
+}
+
+fun Project.findRequiredTool(name: String, extraCandidates: List<String> = emptyList()): String =
+    findToolOrNull(name, extraCandidates) ?: throw GradleException(
+        "Cannot find required tool '$name'. " +
+                "Install it or set ${name.uppercase()}_PATH=/full/path/to/$name"
+    )
+
 fun Project.ensureToolAtExecutionTime(toolLabel: String, resolvedPathOrName: String): String {
-    // If it's an absolute path, verify it exists.
-    if (resolvedPathOrName.contains(File.separatorChar)) {
+    val looksLikePath = File(resolvedPathOrName).isAbsolute ||
+            resolvedPathOrName.contains('/') ||
+            resolvedPathOrName.contains('\\')
+
+    // If it's a path, verify it exists.
+    if (looksLikePath) {
         val f = file(resolvedPathOrName)
         if (!f.exists()) {
             throw GradleException("Cannot find '$toolLabel' at: ${f.absolutePath}")
         }
-        if (!f.canExecute()) {
+        if (!isWindowsHost() && !f.canExecute()) {
             throw GradleException(
                 "Cannot execute '$toolLabel' at: ${f.absolutePath}\n" +
                         "On CI, this is often fixed by: chmod +x ${f.absolutePath}\n" +
@@ -98,8 +172,12 @@ fun Project.ensureToolAtExecutionTime(toolLabel: String, resolvedPathOrName: Str
         return f.absolutePath
     }
 
-    // Otherwise it's a bare command (e.g. "emcmake") → rely on PATH at runtime.
-    return resolvedPathOrName
+    findToolOnPathOrNull(toolLabel)?.let { return it }
+
+    throw GradleException(
+        "Cannot find required tool '$toolLabel'. " +
+                "Install it or set ${toolLabel.uppercase()}_PATH=/full/path/to/$toolLabel"
+    )
 }
 
 kotlin {
@@ -129,26 +207,17 @@ kotlin {
         }
     }
 
-    fun findTool(name: String, extraCandidates: List<String> = emptyList()): String {
-        propString("${name.uppercase()}_PATH")?.let { if (file(it).canExecute()) return it }
-        System.getenv("${name.uppercase()}_PATH")?.let { if (file(it).canExecute()) return it }
-
-        val candidates = mutableListOf(
-            "/opt/homebrew/bin/$name",
-            "/usr/local/bin/$name",
-            "/usr/bin/$name"
+    val cmakePath = findToolOrNull(
+        "cmake",
+        extraCandidates = listOf(
+            "C:/Program Files/CMake/bin/cmake.exe",
+            "C:/ProgramData/chocolatey/bin/cmake.exe"
         )
-        candidates.addAll(extraCandidates)
-
-        for (p in candidates) if (file(p).canExecute()) return p
-
-        throw GradleException(
-            "Cannot find required tool '$name'. " +
-                    "Install it or set ${name.uppercase()}_PATH=/full/path/to/$name"
-        )
-    }
-
-    val cmakePath = findTool("cmake")
+    ) ?: "cmake"
+    val ninjaPath = findToolOrNull(
+        "ninja",
+        extraCandidates = listOf("C:/ProgramData/chocolatey/bin/ninja.exe")
+    )
 
     val hostOsName = System.getProperty("os.name").lowercase()
     val isMacHost = hostOsName.contains("mac")
@@ -164,7 +233,7 @@ kotlin {
     // iOS native build / merge tasks (MAC-ONLY)
     // ------------------------------------------------------------
     if (isMacHost) {
-        val libtoolPath = findTool("libtool")
+        val libtoolPath = findRequiredTool("libtool")
 
         listOf(
             Triple(iosX64(), "x86_64", "iPhoneSimulator"),
@@ -190,11 +259,12 @@ kotlin {
                         commandLine("xcrun", "--sdk", sdk, "--show-sdk-path")
                     }.standardOutput.asText.map { it.trim() }
                     val systemName = if (sdk == "macosx") "Darwin" else "iOS"
+                    val resolvedCmake = ensureToolAtExecutionTime("cmake", cmakePath)
                     cmakeBuildDir.mkdirs()
-                    environment("PATH", "/opt/homebrew/bin:" + System.getenv("PATH"))
+                    environment("PATH", pathWithPrependedEntries("/opt/homebrew/bin", System.getenv("PATH")))
 
                     commandLine = listOf(
-                        cmakePath,
+                        resolvedCmake,
                         "-S", sourceDir.absolutePath,
                         "-B", buildDir.absolutePath,
                         "-DCMAKE_SYSTEM_NAME=$systemName",
@@ -218,13 +288,16 @@ kotlin {
                 Exec::class
             ) {
                 dependsOn(buildTaskName)
-                environment("PATH", "/opt/homebrew/bin:" + System.getenv("PATH"))
-                commandLine = listOf(
-                    cmakePath,
-                    "--build", cmakeBuildDir.absolutePath,
-                    "--target", "llama_static_wrapper",
-                    "--verbose"
-                )
+                doFirst {
+                    val resolvedCmake = ensureToolAtExecutionTime("cmake", cmakePath)
+                    environment("PATH", pathWithPrependedEntries("/opt/homebrew/bin", System.getenv("PATH")))
+                    commandLine = listOf(
+                        resolvedCmake,
+                        "--build", cmakeBuildDir.absolutePath,
+                        "--target", "llama_static_wrapper",
+                        "--verbose"
+                    )
+                }
             }
 
             val libPath = cmakeBuildDir.absolutePath
@@ -395,9 +468,10 @@ kotlin {
             }
 
             desktopJniBuildDir.mkdirs()
+            val resolvedCmake = ensureToolAtExecutionTime("cmake", cmakePath)
 
             val args = mutableListOf(
-                cmakePath,
+                resolvedCmake,
                 "-S", desktopJniSourceDir.absolutePath,
                 "-B", desktopJniBuildDir.absolutePath,
                 "-DCMAKE_BUILD_TYPE=Release",
@@ -409,9 +483,12 @@ kotlin {
             }
 
             if (desktopPlatform == "windows") {
-                // Use Ninja on Windows CI for faster, more reliable builds than Visual Studio generator.
-                // Ninja is pre-installed on GitHub windows-latest runners.
-                args += listOf("-G", "Ninja")
+                if (ninjaPath != null) {
+                    // Prefer Ninja when available, but don't require it for local Windows builds.
+                    args += listOf("-G", "Ninja", "-DCMAKE_MAKE_PROGRAM=$ninjaPath")
+                } else {
+                    logger.lifecycle("Ninja not found on Windows PATH. Falling back to CMake's default generator.")
+                }
             }
 
             commandLine(args)
@@ -422,12 +499,14 @@ kotlin {
         group = "llama-native"
         description = "Build desktop ($desktopPlatform) llama_jni native library"
         dependsOn(buildLlamaJniDesktop)
-
-        commandLine(
-            cmakePath,
-            "--build", desktopJniBuildDir.absolutePath,
-            "--config", "Release"
-        )
+        doFirst {
+            val resolvedCmake = ensureToolAtExecutionTime("cmake", cmakePath)
+            commandLine(
+                resolvedCmake,
+                "--build", desktopJniBuildDir.absolutePath,
+                "--config", "Release"
+            )
+        }
     }
 
     val libFileName = System.mapLibraryName("llama_jni")
@@ -524,15 +603,16 @@ kotlin {
             wasmNativeBuildDir.mkdirs()
 
             val resolved = ensureToolAtExecutionTime("emcmake", emcmakePath)
+            val resolvedCmake = ensureToolAtExecutionTime("cmake", cmakePath)
 
             if (!emsdkRoot.isNullOrBlank() && !emscriptenBinDir.isNullOrBlank()) {
                 environment("EMSDK", emsdkRoot)
-                environment("PATH", emscriptenBinDir + ":" + System.getenv("PATH"))
+                environment("PATH", pathWithPrependedEntries(emscriptenBinDir, System.getenv("PATH")))
             }
 
             val args = mutableListOf(
                 resolved,
-                cmakePath,
+                resolvedCmake,
                 "-S", wasmNativeSourceDir.absolutePath,
                 "-B", wasmNativeBuildDir.absolutePath,
                 "-DCMAKE_BUILD_TYPE=Release",
@@ -555,15 +635,16 @@ kotlin {
 
         doFirst {
             val resolved = ensureToolAtExecutionTime("emmake", emmakePath)
+            val resolvedCmake = ensureToolAtExecutionTime("cmake", cmakePath)
 
             if (!emsdkRoot.isNullOrBlank() && !emscriptenBinDir.isNullOrBlank()) {
                 environment("EMSDK", emsdkRoot)
-                environment("PATH", emscriptenBinDir + ":" + System.getenv("PATH"))
+                environment("PATH", pathWithPrependedEntries(emscriptenBinDir, System.getenv("PATH")))
             }
 
             commandLine(
                 resolved,
-                cmakePath,
+                resolvedCmake,
                 "--build", wasmNativeBuildDir.absolutePath,
                 "--config", "Release"
             )

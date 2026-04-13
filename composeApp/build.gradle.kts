@@ -7,8 +7,6 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.compose.multiplatform)
     alias(libs.plugins.compose.compiler)
-    id("com.google.gms.google-services")
-    id("com.google.firebase.crashlytics")
 }
 
 val versionNum: String? by project
@@ -18,6 +16,25 @@ val versionPatch = properties["llamatik.version.patch"].toString().toInt()
 
 fun versionCode(): Int {
     return versionMajor * 10000 + versionMinor * 100 + versionPatch
+}
+
+val googleServicesCandidates = listOf(
+    project.file("google-services.json"),
+    project.file("src/google-services.json"),
+    project.file("src/debug/google-services.json"),
+    project.file("src/release/google-services.json"),
+)
+
+val hasGoogleServicesConfig = googleServicesCandidates.any { it.isFile }
+
+if (hasGoogleServicesConfig) {
+    apply(plugin = "com.google.gms.google-services")
+    apply(plugin = "com.google.firebase.crashlytics")
+} else {
+    logger.lifecycle(
+        "google-services.json not found under ${project.projectDir}. " +
+                "Skipping Google Services and Crashlytics Gradle plugins for local builds."
+    )
 }
 
 val macNativeDir = project(":library").layout.buildDirectory.dir("llama-jni/macos")
