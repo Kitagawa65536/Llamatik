@@ -14,6 +14,7 @@ set(LLAMA_CPP_DIR "${REPO_ROOT}/llama.cpp")
 set(WHISPER_CPP_DIR "${REPO_ROOT}/whisper.cpp")
 set(SD_CPP_DIR "${REPO_ROOT}/stable-diffusion.cpp")
 set(MTMD_DIR "${LLAMA_CPP_DIR}/tools/mtmd")
+include("${CMAKE_CURRENT_LIST_DIR}/../llamatik-mtmd-sources.cmake")
 
 if(NOT EXISTS "${LLAMA_CPP_DIR}/CMakeLists.txt")
   message(FATAL_ERROR "llama.cpp not found at ${LLAMA_CPP_DIR}")
@@ -59,28 +60,7 @@ endif()
 # ---- mtmd (multimodal) sources ----
 set(HAVE_MTMD OFF)
 if(EXISTS "${MTMD_DIR}/mtmd.cpp")
-  add_library(mtmd_sources OBJECT
-    "${MTMD_DIR}/mtmd.cpp"
-    "${MTMD_DIR}/mtmd-helper.cpp"
-    "${MTMD_DIR}/mtmd-audio.cpp"
-    "${MTMD_DIR}/clip.cpp"
-    "${MTMD_DIR}/models/cogvlm.cpp"
-    "${MTMD_DIR}/models/conformer.cpp"
-    "${MTMD_DIR}/models/glm4v.cpp"
-    "${MTMD_DIR}/models/internvl.cpp"
-    "${MTMD_DIR}/models/kimivl.cpp"
-    "${MTMD_DIR}/models/llama4.cpp"
-    "${MTMD_DIR}/models/llava.cpp"
-    "${MTMD_DIR}/models/minicpmv.cpp"
-    "${MTMD_DIR}/models/mobilenetv5.cpp"
-    "${MTMD_DIR}/models/pixtral.cpp"
-    "${MTMD_DIR}/models/qwen2vl.cpp"
-    "${MTMD_DIR}/models/qwen3vl.cpp"
-    "${MTMD_DIR}/models/siglip.cpp"
-    "${MTMD_DIR}/models/whisper-enc.cpp"
-    "${MTMD_DIR}/models/youtuvl.cpp"
-    "${MTMD_DIR}/deprecation-warning.cpp"
-  )
+  add_library(mtmd_sources OBJECT ${LLAMATIK_MTMD_SOURCES})
   target_include_directories(mtmd_sources PRIVATE
     "${MTMD_DIR}"
     "${LLAMA_CPP_DIR}/include"

@@ -10,6 +10,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Path to vendored llama.cpp inside the repo
 set(LLAMA_CPP_DIR "${CMAKE_SOURCE_DIR}/../../../../llama.cpp")
 set(MTMD_DIR "${LLAMA_CPP_DIR}/tools/mtmd")
+include("${CMAKE_CURRENT_LIST_DIR}/../../../cmake/llamatik-mtmd-sources.cmake")
 
 # Build llama.cpp "common" helpers (needed for json-schema-to-grammar)
 set(LLAMA_BUILD_COMMON ON CACHE BOOL "Build llama.cpp common helpers" FORCE)
@@ -56,28 +57,7 @@ add_subdirectory("${STABLE_DIFFUSION_CPP_DIR}" "${CMAKE_BINARY_DIR}/stable-diffu
 find_library(log-lib log)
 
 # Build mtmd (multimodal) sources as an object library to include in llama_jni
-add_library(mtmd_sources OBJECT
-        ${MTMD_DIR}/mtmd.cpp
-        ${MTMD_DIR}/mtmd-helper.cpp
-        ${MTMD_DIR}/mtmd-audio.cpp
-        ${MTMD_DIR}/clip.cpp
-        ${MTMD_DIR}/models/cogvlm.cpp
-        ${MTMD_DIR}/models/conformer.cpp
-        ${MTMD_DIR}/models/glm4v.cpp
-        ${MTMD_DIR}/models/internvl.cpp
-        ${MTMD_DIR}/models/kimivl.cpp
-        ${MTMD_DIR}/models/llama4.cpp
-        ${MTMD_DIR}/models/llava.cpp
-        ${MTMD_DIR}/models/minicpmv.cpp
-        ${MTMD_DIR}/models/mobilenetv5.cpp
-        ${MTMD_DIR}/models/pixtral.cpp
-        ${MTMD_DIR}/models/qwen2vl.cpp
-        ${MTMD_DIR}/models/qwen3vl.cpp
-        ${MTMD_DIR}/models/siglip.cpp
-        ${MTMD_DIR}/models/whisper-enc.cpp
-        ${MTMD_DIR}/models/youtuvl.cpp
-        ${MTMD_DIR}/deprecation-warning.cpp
-)
+add_library(mtmd_sources OBJECT ${LLAMATIK_MTMD_SOURCES})
 
 target_include_directories(mtmd_sources PRIVATE
         ${MTMD_DIR}

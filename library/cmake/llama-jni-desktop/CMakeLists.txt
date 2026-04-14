@@ -19,6 +19,7 @@ set(WHISPER_JNI_SRC "${REPO_ROOT}/library/src/commonMain/cpp/whisper_jni.cpp")
 set(MULTIMODAL_JNI_SRC "${REPO_ROOT}/library/src/commonMain/cpp/multimodal_jni.cpp")
 
 set(MTMD_DIR "${LLAMA_CPP_DIR}/tools/mtmd")
+include("${CMAKE_CURRENT_LIST_DIR}/../llamatik-mtmd-sources.cmake")
 
 set(WHISPER_CPP_DIR "${REPO_ROOT}/whisper.cpp")
 
@@ -133,28 +134,7 @@ if(HAVE_WHISPER)
     )
 endif()
 
-add_library(mtmd_sources OBJECT
-    "${MTMD_DIR}/mtmd.cpp"
-    "${MTMD_DIR}/mtmd-helper.cpp"
-    "${MTMD_DIR}/mtmd-audio.cpp"
-    "${MTMD_DIR}/clip.cpp"
-    "${MTMD_DIR}/models/cogvlm.cpp"
-    "${MTMD_DIR}/models/conformer.cpp"
-    "${MTMD_DIR}/models/glm4v.cpp"
-    "${MTMD_DIR}/models/internvl.cpp"
-    "${MTMD_DIR}/models/kimivl.cpp"
-    "${MTMD_DIR}/models/llama4.cpp"
-    "${MTMD_DIR}/models/llava.cpp"
-    "${MTMD_DIR}/models/minicpmv.cpp"
-    "${MTMD_DIR}/models/mobilenetv5.cpp"
-    "${MTMD_DIR}/models/pixtral.cpp"
-    "${MTMD_DIR}/models/qwen2vl.cpp"
-    "${MTMD_DIR}/models/qwen3vl.cpp"
-    "${MTMD_DIR}/models/siglip.cpp"
-    "${MTMD_DIR}/models/whisper-enc.cpp"
-    "${MTMD_DIR}/models/youtuvl.cpp"
-    "${MTMD_DIR}/deprecation-warning.cpp"
-)
+add_library(mtmd_sources OBJECT ${LLAMATIK_MTMD_SOURCES})
 
 target_include_directories(mtmd_sources PRIVATE
     "${MTMD_DIR}"
