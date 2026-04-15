@@ -198,8 +198,8 @@ static std::string sanitize_generation(std::string s) {
             changed |= ltrim_str("- ");
             changed |= ltrim_str("* ");
             changed |= ltrim_str("> ");
-            changed |= ltrim_str(u8"—");
-            changed |= ltrim_str(u8"–");
+            changed |= ltrim_str(u8"\u2014");
+            changed |= ltrim_str(u8"\u2013");
 
             if (!t.empty() && (t[0] == ':' || t[0] == '-')) {
                 t.erase(0, 1);

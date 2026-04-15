@@ -34,7 +34,10 @@ val desktopPlatform: String = when {
     else -> "linux"
 }
 
-val nativeLibDir = project(":library").layout.buildDirectory.dir("llama-jni/$desktopPlatform")
+val libraryNativeResourcesDir = project(":library")
+    .layout
+    .buildDirectory
+    .dir("generated/native-resources/native/$desktopPlatform")
 val generatedNativeResources = layout.buildDirectory.dir("generated/nativeResources")
 
 kotlin {
@@ -351,9 +354,9 @@ val nativeLibPattern = when (desktopPlatform) {
 }
 
 val copyDesktopNativeLib by tasks.registering(Copy::class) {
-    dependsOn(":library:compileLlamaJniDesktop")
-    from(nativeLibDir)
-    include(nativeLibPattern)
+    dependsOn(":library:copyDesktopJniToResources")
+    from(libraryNativeResourcesDir)
+    include(nativeLibPattern, "native-libs.txt")
     into(generatedNativeResources.map { it.dir("native/$desktopPlatform") })
 }
 
