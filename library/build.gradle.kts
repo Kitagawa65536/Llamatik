@@ -258,6 +258,12 @@ kotlin {
                     val sdkPathProvider = providers.exec {
                         commandLine("xcrun", "--sdk", sdk, "--show-sdk-path")
                     }.standardOutput.asText.map { it.trim() }
+                    val cCompilerProvider = providers.exec {
+                        commandLine("xcrun", "--sdk", sdk, "--find", "clang")
+                    }.standardOutput.asText.map { it.trim() }
+                    val cxxCompilerProvider = providers.exec {
+                        commandLine("xcrun", "--sdk", sdk, "--find", "clang++")
+                    }.standardOutput.asText.map { it.trim() }
                     val systemName = if (sdk == "macosx") "Darwin" else "iOS"
                     val resolvedCmake = ensureToolAtExecutionTime("cmake", cmakePath)
                     cmakeBuildDir.mkdirs()
@@ -268,11 +274,15 @@ kotlin {
                         "-S", sourceDir.absolutePath,
                         "-B", buildDir.absolutePath,
                         "-DCMAKE_SYSTEM_NAME=$systemName",
+                        "-DCMAKE_C_COMPILER=${cCompilerProvider.get()}",
+                        "-DCMAKE_CXX_COMPILER=${cxxCompilerProvider.get()}",
+                        "-DCMAKE_ASM_COMPILER=${cCompilerProvider.get()}",
                         "-DCMAKE_OSX_ARCHITECTURES=$archName",
                         "-DCMAKE_OSX_SYSROOT=${sdkPathProvider.get()}",
                         "-DCMAKE_OSX_DEPLOYMENT_TARGET=$minIos",
                         "-DCMAKE_INSTALL_PREFIX=${buildDir.resolve("install")}",
                         "-DCMAKE_IOS_INSTALL_COMBINED=NO",
+                        "-DCMAKE_TRY_COMPILE_PLATFORM_VARIABLES=CMAKE_C_COMPILER;CMAKE_CXX_COMPILER;CMAKE_ASM_COMPILER;CMAKE_SYSTEM_NAME;CMAKE_OSX_ARCHITECTURES;CMAKE_OSX_SYSROOT;CMAKE_OSX_DEPLOYMENT_TARGET",
                         "-DCMAKE_BUILD_TYPE=Release",
                         "-DCMAKE_POSITION_INDEPENDENT_CODE=ON",
                         "-DGGML_OPENMP=OFF",
@@ -362,6 +372,8 @@ kotlin {
                 dependsOn(mergeTask)
             }
 
+            val merged = "$libPath/libllama_merged.a"
+
             arch.compilations.getByName("main").cinterops {
                 create("llama") {
                     val defFileName = "llama_ios.def"
@@ -369,7 +381,10 @@ kotlin {
                     packageName("com.llamatik.library.platform.llama")
                     compilerOpts("-I${projectDir}/src/iosMain/c_interop/include")
                     extraOpts("-libraryPath", libPath)
-                    tasks.named(interopProcessingTaskName).configure { dependsOn(mergeTask) }
+                    tasks.named(interopProcessingTaskName).configure {
+                        dependsOn(mergeTask)
+                        inputs.file(file(merged))
+                    }
                 }
 
                 create("whisper") {
@@ -378,7 +393,10 @@ kotlin {
                     packageName("com.llamatik.library.platform.whisper")
                     compilerOpts("-I${projectDir}/src/iosMain/c_interop/include")
                     extraOpts("-libraryPath", libPath)
-                    tasks.named(interopProcessingTaskName).configure { dependsOn(mergeTask) }
+                    tasks.named(interopProcessingTaskName).configure {
+                        dependsOn(mergeTask)
+                        inputs.file(file(merged))
+                    }
                 }
 
                 create("stableDiffusion") {
@@ -390,7 +408,10 @@ kotlin {
                         "-I${rootDir}/stable-diffusion.cpp/include"
                     )
                     extraOpts("-libraryPath", libPath)
-                    tasks.named(interopProcessingTaskName).configure { dependsOn(mergeTask) }
+                    tasks.named(interopProcessingTaskName).configure {
+                        dependsOn(mergeTask)
+                        inputs.file(file(merged))
+                    }
                 }
 
                 create("multimodal") {
@@ -399,11 +420,12 @@ kotlin {
                     packageName("com.llamatik.library.platform.vlm")
                     compilerOpts("-I${projectDir}/src/iosMain/c_interop/include")
                     extraOpts("-libraryPath", libPath)
-                    tasks.named(interopProcessingTaskName).configure { dependsOn(mergeTask) }
+                    tasks.named(interopProcessingTaskName).configure {
+                        dependsOn(mergeTask)
+                        inputs.file(file(merged))
+                    }
                 }
             }
-
-            val merged = "$libPath/libllama_merged.a"
 
             arch.binaries.getFramework("DEBUG").apply {
                 baseName = "llamatik"
