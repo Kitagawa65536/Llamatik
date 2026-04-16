@@ -48,6 +48,11 @@ kotlin {
         }
     }
     jvm("desktop")
+        .apply {
+            mainRun {
+                mainClass.set("MainKt")
+            }
+        }
 
     // Web (Kotlin/Wasm)
     @OptIn(org.jetbrains.kotlin.gradle.ExperimentalWasmDsl::class)

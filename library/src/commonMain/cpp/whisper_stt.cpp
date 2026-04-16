@@ -1,27 +1,123 @@
 #include "whisper_stt.h"
 
-#include <string>
-#include <mutex>
-
 #include <vector>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <exception>
+#include <cstdlib>
+
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <mutex>
+#include <string>
+#endif
 
 #include "whisper.h"
 
-static std::mutex g_mu;
 static whisper_context* g_ctx = nullptr;
+static whisper_state* g_state = nullptr;
+
+#ifdef _WIN32
+static SRWLOCK g_lock = SRWLOCK_INIT;
+static char g_last[16384] = { 0 };
+#else
+static std::mutex g_mu;
 static std::string g_last;
+#endif
+
+struct whisper_lock_guard {
+#ifdef _WIN32
+    whisper_lock_guard() { AcquireSRWLockExclusive(&g_lock); }
+    ~whisper_lock_guard() { ReleaseSRWLockExclusive(&g_lock); }
+#else
+    std::lock_guard<std::mutex> guard{ g_mu };
+#endif
+};
+
+static void whisper_last_clear() {
+#ifdef _WIN32
+    g_last[0] = '\0';
+#else
+    g_last.clear();
+#endif
+}
+
+static void whisper_last_set(const char* message) {
+#ifdef _WIN32
+    if (!message) {
+        g_last[0] = '\0';
+        return;
+    }
+    std::snprintf(g_last, sizeof(g_last), "%s", message);
+#else
+    g_last = message ? message : "";
+#endif
+}
+
+static void whisper_last_append(const char* message) {
+    if (!message || !message[0]) return;
+#ifdef _WIN32
+    const size_t used = std::strlen(g_last);
+    if (used >= sizeof(g_last) - 1) return;
+    std::snprintf(g_last + used, sizeof(g_last) - used, "%s", message);
+#else
+    g_last += message;
+#endif
+}
+
+static const char* whisper_last_c_str() {
+#ifdef _WIN32
+    return g_last;
+#else
+    return g_last.c_str();
+#endif
+}
 
 int whisper_stt_init(const char* model_path) {
-    std::lock_guard<std::mutex> lock(g_mu);
-    if (g_ctx) return 1;
+    whisper_lock_guard lock;
+    if (g_ctx && g_state) return 1;
 
     whisper_context_params cparams = whisper_context_default_params();
-    // Keep defaults; you can customize later (GPU/Metal/etc)
+    // Windows desktop has been unstable with whisper.cpp's default GPU-first init.
+    // Keep the change narrowly scoped to Windows and fall back to conservative CPU params.
+#ifdef _WIN32
+    cparams.use_gpu = false;
+    cparams.flash_attn = false;
+    cparams.dtw_token_timestamps = false;
+    cparams.dtw_n_top = -1;
+    cparams.dtw_mem_size = 0;
+#endif
 
-    g_ctx = whisper_init_from_file_with_params(model_path, cparams);
+    try {
+        whisper_context* ctx = whisper_init_from_file_with_params_no_state(model_path, cparams);
+        if (!ctx) {
+            g_ctx = nullptr;
+            g_state = nullptr;
+            return 0;
+        }
+
+        whisper_state* state = whisper_init_state(ctx);
+        if (!state) {
+            whisper_free(ctx);
+            g_ctx = nullptr;
+            g_state = nullptr;
+            return 0;
+        }
+
+        g_ctx = ctx;
+        g_state = state;
+    } catch (const std::exception& ex) {
+        std::fprintf(stderr, "whisper_stt_init failed for '%s': %s\n", model_path ? model_path : "(null)", ex.what());
+        g_ctx = nullptr;
+        g_state = nullptr;
+    } catch (...) {
+        std::fprintf(stderr, "whisper_stt_init failed for '%s': unknown native exception\n", model_path ? model_path : "(null)");
+        g_ctx = nullptr;
+        g_state = nullptr;
+    }
+
     return g_ctx ? 1 : 0;
 }
 
@@ -114,18 +210,18 @@ static bool load_wav_pcm16_mono_16k(const char* path, std::vector<float>& out) {
 }
 
 const char* whisper_stt_transcribe_wav(const char* wav_path, const char* language, const char* initial_prompt) {
-    std::lock_guard<std::mutex> lock(g_mu);
-    g_last.clear();
+    whisper_lock_guard lock;
+    whisper_last_clear();
 
-    if (!g_ctx) {
-        g_last = "ERROR: Whisper not initialized";
-        return g_last.c_str();
+    if (!g_ctx || !g_state) {
+        whisper_last_set("ERROR: Whisper not initialized");
+        return whisper_last_c_str();
     }
 
     std::vector<float> pcmf;
     if (!load_wav_pcm16_mono_16k(wav_path, pcmf)) {
-        g_last = "ERROR: WAV must be PCM16 mono 16kHz";
-        return g_last.c_str();
+        whisper_last_set("ERROR: WAV must be PCM16 mono 16kHz");
+        return whisper_last_c_str();
     }
 
     whisper_full_params params = whisper_full_default_params(WHISPER_SAMPLING_GREEDY);
@@ -142,22 +238,36 @@ const char* whisper_stt_transcribe_wav(const char* wav_path, const char* languag
         params.initial_prompt = initial_prompt;
     }
 
-    if (whisper_full(g_ctx, params, pcmf.data(), (int)pcmf.size()) != 0) {
-        g_last = "ERROR: whisper_full failed";
-        return g_last.c_str();
+    try {
+        if (whisper_full_with_state(g_ctx, g_state, params, pcmf.data(), (int)pcmf.size()) != 0) {
+            whisper_last_set("ERROR: whisper_full failed");
+            return whisper_last_c_str();
+        }
+    } catch (const std::exception& ex) {
+        char buffer[1024] = { 0 };
+        std::snprintf(buffer, sizeof(buffer), "ERROR: whisper_full exception: %s", ex.what());
+        whisper_last_set(buffer);
+        return whisper_last_c_str();
+    } catch (...) {
+        whisper_last_set("ERROR: whisper_full exception");
+        return whisper_last_c_str();
     }
 
-    const int n = whisper_full_n_segments(g_ctx);
+    const int n = whisper_full_n_segments_from_state(g_state);
     for (int i = 0; i < n; i++) {
-        const char* seg = whisper_full_get_segment_text(g_ctx, i);
-        if (seg) g_last += seg;
+        const char* seg = whisper_full_get_segment_text_from_state(g_state, i);
+        whisper_last_append(seg);
     }
 
-    return g_last.c_str();
+    return whisper_last_c_str();
 }
 
 void whisper_stt_release(void) {
-    std::lock_guard<std::mutex> lock(g_mu);
+    whisper_lock_guard lock;
+    if (g_state) {
+        whisper_free_state(g_state);
+        g_state = nullptr;
+    }
     if (g_ctx) {
         whisper_free(g_ctx);
         g_ctx = nullptr;
